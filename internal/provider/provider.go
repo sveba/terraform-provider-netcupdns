@@ -5,18 +5,16 @@ import (
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/svetob/terraform-provider-netcupdns/internal/client"
 )
 
 // Ensure the implementation satisfies the expected interfaces
 var (
-	_ provider.Provider             = &netcupCcpProvider{}
-	_ provider.ProviderWithMetadata = &netcupCcpProvider{}
+	_ provider.Provider = &netcupCcpProvider{}
 )
 
 func New() provider.Provider {
@@ -29,30 +27,27 @@ func (p *netcupCcpProvider) Metadata(_ context.Context, _ provider.MetadataReque
 	resp.TypeName = "netcupdns"
 }
 
-// GetSchema
-func (p *netcupCcpProvider) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+// Schema
+func (p *netcupCcpProvider) Schema(_ context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "The Netcup-DNS provider provides possibility to modify Netcup-DNS records",
-		Attributes: map[string]tfsdk.Attribute{
-			"customer_number": {
-				Type:                types.StringType,
+		Attributes: map[string]schema.Attribute{
+			"customer_number": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Netcup customer number. Alternative defined by env `NETCUP_CUSTOMER_NUMBER`",
 			},
-			"key": {
-				Type:                types.StringType,
+			"key": schema.StringAttribute{
 				Optional:            true,
 				Sensitive:           true,
 				MarkdownDescription: "Netcup CCP API key. Alternative defined by env `NETCUP_API_KEY`",
 			},
-			"password": {
-				Type:                types.StringType,
+			"password": schema.StringAttribute{
 				Optional:            true,
 				Sensitive:           true,
 				MarkdownDescription: "Netcup CCP API password. Alternative defined by env `NETCUP_API_PASSWORD`",
 			},
 		},
-	}, nil
+	}
 }
 
 // Provider schema struct
@@ -73,7 +68,7 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 
 	// User must provide a user to the provider
 	var customerNumber string
-	if config.CustomerNumber.Unknown {
+	if config.CustomerNumber.IsUnknown() {
 		// Cannot connect to client with an unknown value
 		resp.Diagnostics.AddWarning(
 			"Unable to create client",
@@ -82,10 +77,10 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	if config.CustomerNumber.Null {
+	if config.CustomerNumber.IsNull() {
 		customerNumber = os.Getenv("NETCUP_CUSTOMER_NUMBER")
 	} else {
-		customerNumber = config.CustomerNumber.Value
+		customerNumber = config.CustomerNumber.ValueString()
 	}
 
 	if customerNumber == "" {
@@ -97,7 +92,7 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	var ccpApiPassword string
-	if config.Password.Unknown {
+	if config.Password.IsUnknown() {
 		resp.Diagnostics.AddError(
 			"Unable to create client",
 			"Cannot use unknown value as api password",
@@ -105,10 +100,10 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	if config.Password.Null {
+	if config.Password.IsNull() {
 		ccpApiPassword = os.Getenv("NETCUP_API_PASSWORD")
 	} else {
-		ccpApiPassword = config.Password.Value
+		ccpApiPassword = config.Password.ValueString()
 	}
 
 	if ccpApiPassword == "" {
@@ -120,7 +115,7 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	var ccpApiKey string
-	if config.Key.Unknown {
+	if config.Key.IsUnknown() {
 		resp.Diagnostics.AddError(
 			"Unable to create client",
 			"Cannot use unknown value as api key",
@@ -128,10 +123,10 @@ func (p *netcupCcpProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
-	if config.Key.Null {
+	if config.Key.IsNull() {
 		ccpApiKey = os.Getenv("NETCUP_API_KEY")
 	} else {
-		ccpApiKey = config.Key.Value
+		ccpApiKey = config.Key.ValueString()
 	}
 
 	if ccpApiKey == "" {

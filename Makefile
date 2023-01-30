@@ -3,7 +3,7 @@ HOSTNAME=github.com
 NAMESPACE=svetob
 NAME=netcupdns
 BINARY=terraform-provider-${NAME}
-VERSION=0.0.1
+VERSION=1.0.0
 OS_ARCH=darwin_arm64
 
 default: install
