@@ -4,10 +4,9 @@ import (
 	"context"
 
 	"github.com/fatih/structs"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/svetob/terraform-provider-netcupdns/internal/client"
@@ -31,46 +30,40 @@ func (r *dnsRecordDataSource) Metadata(_ context.Context, req resource.MetadataR
 	resp.TypeName = req.ProviderTypeName + "_record"
 }
 
-func (r dnsRecordDataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *dnsRecordDataSource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		MarkdownDescription: "Represents a DNS-Record. See [Netcup-API](https://ccp.netcup.net/run/webservice/servers/endpoint.php#Dnsrecord)",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:        types.StringType,
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Required:    false,
 				Optional:    false,
 				Computed:    true,
 				Description: "Unique ID of the record. Provided from Netcup-API",
 			},
-			"domainname": {
-				Type:        types.StringType,
+			"domainname": schema.StringAttribute{
 				Required:    true,
 				Description: "Domainname of the record.",
 			},
-			"hostname": {
-				Type:        types.StringType,
+			"hostname": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the record. Use '@' for root of domain.",
 			},
-			"type": {
-				Type:        types.StringType,
+			"type": schema.StringAttribute{
 				Required:    true,
 				Description: "Type of Record like A or MX.",
 			},
-			"priority": {
-				Type:        types.StringType,
+			"priority": schema.StringAttribute{
 				Required:    false,
 				Optional:    true,
 				Computed:    true,
 				Description: "Required for MX records.",
 			},
-			"destination": {
-				Type:        types.StringType,
+			"destination": schema.StringAttribute{
 				Required:    true,
 				Description: "Target of the record.",
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *dnsRecordDataSource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
@@ -100,19 +93,19 @@ func (r dnsRecordDataSource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	var newDnsRecord = client.NewDnsRecord{
-		Hostname:    plan.Hostname.Value,
-		Type:        plan.Type.Value,
-		Destination: plan.Destination.Value,
+		Hostname:    plan.Hostname.ValueString(),
+		Type:        plan.Type.ValueString(),
+		Destination: plan.Destination.ValueString(),
 	}
 
-	if !plan.Priority.Unknown && !plan.Priority.Null {
-		newDnsRecord.Priority = plan.Priority.Value
+	if !plan.Priority.IsUnknown() && !plan.Priority.IsNull() {
+		newDnsRecord.Priority = plan.Priority.ValueString()
 	}
 
 	tflog.Trace(ctx, "Create DNS Record", structs.Map(newDnsRecord))
 
 	// Create new order
-	dnsRecord, err := r.client.CreateDnsRecord(plan.Domainname.Value, newDnsRecord)
+	dnsRecord, err := r.client.CreateDnsRecord(plan.Domainname.ValueString(), newDnsRecord)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating dns record",
@@ -122,12 +115,12 @@ func (r dnsRecordDataSource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	var state = DnsRecord{
-		ID:          types.String{Value: dnsRecord.Id},
+		ID:          types.StringValue(dnsRecord.Id),
 		Domainname:  plan.Domainname,
-		Hostname:    types.String{Value: dnsRecord.Hostname},
-		Type:        types.String{Value: dnsRecord.Type},
-		Priority:    types.String{Value: dnsRecord.Priority},
-		Destination: types.String{Value: dnsRecord.Destination},
+		Hostname:    types.StringValue(dnsRecord.Hostname),
+		Type:        types.StringValue(dnsRecord.Type),
+		Priority:    types.StringValue(dnsRecord.Priority),
+		Destination: types.StringValue(dnsRecord.Destination),
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -148,21 +141,21 @@ func (r dnsRecordDataSource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Get current value
-	dnsRecord, err := r.client.GetDnsRecordById(state.Domainname.Value, state.ID.Value)
+	dnsRecord, err := r.client.GetDnsRecordById(state.Domainname.ValueString(), state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading record",
-			"Could not read recordID "+state.ID.Value+": "+err.Error(),
+			"Could not read recordID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
 
 	tflog.Trace(ctx, "Got DNS Record", structs.Map(dnsRecord))
 
-	state.Hostname = types.String{Value: dnsRecord.Hostname}
-	state.Type = types.String{Value: dnsRecord.Type}
-	state.Priority = types.String{Value: dnsRecord.Priority}
-	state.Destination = types.String{Value: dnsRecord.Destination}
+	state.Hostname = types.StringValue(dnsRecord.Hostname)
+	state.Type = types.StringValue(dnsRecord.Type)
+	state.Priority = types.StringValue(dnsRecord.Priority)
+	state.Destination = types.StringValue(dnsRecord.Destination)
 
 	// Set state
 	diags = resp.State.Set(ctx, &state)
@@ -190,24 +183,24 @@ func (r dnsRecordDataSource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	var newDnsRecord = client.DnsRecord{
-		Id:          state.ID.Value,
-		Hostname:    plan.Hostname.Value,
-		Type:        plan.Type.Value,
-		Destination: plan.Destination.Value,
+		Id:          state.ID.ValueString(),
+		Hostname:    plan.Hostname.ValueString(),
+		Type:        plan.Type.ValueString(),
+		Destination: plan.Destination.ValueString(),
 	}
 
-	if !plan.Priority.Unknown && !plan.Priority.Null {
-		newDnsRecord.Priority = plan.Priority.Value
+	if !plan.Priority.IsUnknown() && !plan.Priority.IsNull() {
+		newDnsRecord.Priority = plan.Priority.ValueString()
 	}
 
 	tflog.Trace(ctx, "Updating DNS Record", structs.Map(newDnsRecord))
 
 	// Update order by calling API
-	dnsRecord, err := r.client.UpdateDnsRecord(plan.Domainname.Value, newDnsRecord)
+	dnsRecord, err := r.client.UpdateDnsRecord(plan.Domainname.ValueString(), newDnsRecord)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error update dnsRecord",
-			"Could not update dnsRecordID "+state.ID.Value+": "+err.Error(),
+			"Could not update dnsRecordID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
@@ -215,12 +208,12 @@ func (r dnsRecordDataSource) Update(ctx context.Context, req resource.UpdateRequ
 	// Map response body to resource schema attribute
 	// Generate resource state struct
 	var result = DnsRecord{
-		ID:          types.String{Value: state.ID.Value},
-		Domainname:  types.String{Value: plan.Domainname.Value},
-		Hostname:    types.String{Value: dnsRecord.Hostname},
-		Type:        types.String{Value: dnsRecord.Type},
-		Priority:    types.String{Value: dnsRecord.Priority},
-		Destination: types.String{Value: dnsRecord.Destination},
+		ID:          types.StringValue(state.ID.ValueString()),
+		Domainname:  types.StringValue(plan.Domainname.ValueString()),
+		Hostname:    types.StringValue(dnsRecord.Hostname),
+		Type:        types.StringValue(dnsRecord.Type),
+		Priority:    types.StringValue(dnsRecord.Priority),
+		Destination: types.StringValue(dnsRecord.Destination),
 	}
 
 	// Set state
@@ -242,21 +235,21 @@ func (r dnsRecordDataSource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	var dnsRecord = client.DnsRecord{
-		Id:          state.ID.Value,
-		Hostname:    state.Hostname.Value,
-		Type:        state.Type.Value,
-		Priority:    state.Priority.Value,
-		Destination: state.Destination.Value,
+		Id:          state.ID.ValueString(),
+		Hostname:    state.Hostname.ValueString(),
+		Type:        state.Type.ValueString(),
+		Priority:    state.Priority.ValueString(),
+		Destination: state.Destination.ValueString(),
 	}
 
 	tflog.Trace(ctx, "Deleting DNS Record", structs.Map(dnsRecord))
 
 	// Delete order by calling API
-	err := r.client.DeleteDnsRecord(state.Domainname.Value, dnsRecord)
+	err := r.client.DeleteDnsRecord(state.Domainname.ValueString(), dnsRecord)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting record",
-			"Could not delete recordID "+state.ID.Value+": "+err.Error(),
+			"Could not delete recordID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
