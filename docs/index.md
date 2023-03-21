@@ -14,6 +14,15 @@ Use the navigation to the left to read about the available resources.
 ## Example Usage
 
 ```terraform
+terraform {
+  required_providers {
+    netcupdns = {
+      source = "sveba/netcupdns"
+      version = "1.0.0"
+    }
+  }
+}
+
 provider "netcupdns" {
   customer_number = "123456"
   key             = "theApiKey"
