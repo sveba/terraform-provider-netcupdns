@@ -46,5 +46,3 @@ resource "netcupdns_record" "mail" {
 ### Read-Only
 
 - `id` (String) Unique ID of the record. Provided from Netcup-API
-
-

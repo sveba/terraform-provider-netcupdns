@@ -18,7 +18,6 @@ terraform {
   required_providers {
     netcupdns = {
       source = "sveba/netcupdns"
-      version = "1.0.0"
     }
   }
 }
