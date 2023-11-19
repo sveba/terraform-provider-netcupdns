@@ -17,6 +17,7 @@ type CCPClient struct {
 	httpClient http.Client
 	authData   AuthData
 	UserAgent  string
+	DnsRecordsByDomain map[string][]DnsRecord
 }
 
 type AuthData struct {
@@ -83,6 +84,7 @@ func NewCCPClient(customerNumber, apiKey, apiPassword string) (*CCPClient, error
 	c := CCPClient{
 		hostURL:    HostURL,
 		httpClient: http.Client{Timeout: 10 * time.Second},
+		DnsRecordsByDomain: make(map[string][]DnsRecord),
 	}
 
 	err := c.login(customerNumber, apiKey, apiPassword)
@@ -168,6 +170,12 @@ func (c *CCPClient) GetDnsZone(domainName string) (*DnsZone, error) {
 }
 
 func (c *CCPClient) GetDnsRecords(domainName string) ([]DnsRecord, error) {
+	// check if we have the records for this domain cached to avoid triggering API rate limits
+	records, present := c.DnsRecordsByDomain[domainName]
+	if present {
+		return records, nil
+	}
+
 	body, err := c.doRequest("infoDnsRecords", DomainInfoRequest{
 		AuthData:   c.authData,
 		DomainName: domainName,
@@ -183,6 +191,9 @@ func (c *CCPClient) GetDnsRecords(domainName string) ([]DnsRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// cache records for this domain
+	c.DnsRecordsByDomain[domainName] = res.ResponseData.DnsRecords
 
 	return res.ResponseData.DnsRecords, nil
 }
@@ -204,6 +215,10 @@ func (c *CCPClient) GetDnsRecordById(domainName string, id string) (*DnsRecord, 
 func (c *CCPClient) CreateDnsRecord(domainName string, record NewDnsRecord) (*DnsRecord, error) {
 	fmt.Printf("%+v", record)
 	fmt.Println(domainName)
+
+	// flush cache for this domain to be sure we're not faking an incorrect state
+	delete(c.DnsRecordsByDomain, domainName)
+
 	body, err := c.doRequest("updateDnsRecords", CreateDnsRecordsRequest{
 		DomainInfoRequest: DomainInfoRequest{
 			AuthData:   c.authData,
@@ -232,6 +247,9 @@ func (c *CCPClient) CreateDnsRecord(domainName string, record NewDnsRecord) (*Dn
 }
 
 func (c *CCPClient) UpdateDnsRecord(domainName string, record DnsRecord) (*DnsRecord, error) {
+	// flush cache for this domain to be sure we're not faking an incorrect state
+	delete(c.DnsRecordsByDomain, domainName)
+
 	body, err := c.doRequest("updateDnsRecords", UpdateDnsRecordsRequest{
 		DomainInfoRequest: DomainInfoRequest{
 			AuthData:   c.authData,
@@ -260,6 +278,9 @@ func (c *CCPClient) UpdateDnsRecord(domainName string, record DnsRecord) (*DnsRe
 }
 
 func (c *CCPClient) DeleteDnsRecord(domainName string, record DnsRecord) error {
+	// flush cache for this domain to be sure we're not faking an incorrect state
+	delete(c.DnsRecordsByDomain, domainName)
+
 	deleteRecord := record
 	deleteRecord.DeleteRecord = true
 	body, err := c.doRequest("updateDnsRecords", UpdateDnsRecordsRequest{
